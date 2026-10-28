@@ -1058,45 +1058,6 @@ if __name__ == "__main__":
         if (step + 1) % args.overfit_batch_number == 0:
             train_loader.reset()
 
-            if args.opt_type == "sfadam":
-                for opt in optimizer:
-                    opt.eval()
-#            if (step+1) > 200 and (step+1)%100==0 and (step+1) != args.num_iterations:
-#            if (step+1) > 500 and (step+1)%100==0 and (step+1) != args.num_iterations:
-            if False:
-                finaltrainloss = 0.0
-                for step_1 in range(args.overfit_batch_number):
-                    lossf2 = 0.0 # for getting the mean loss (as simple float) over the accumulation steps
-                    with torch.no_grad():
-                        for micro_step_1 in range(grad_accum_steps):
-                            x, y = train_loader.next_batch()
-                            x, y = x.to(device), y.to(device)
-                            if ddp:
-                                # we want only the last micro-step to sync grads in a DDP model
-                                # the official way to do this is with model.no_sync(), but that is a
-                                # context manager that bloats the code, so we just toggle this variable
-                                model.require_backward_grad_sync = (micro_step_1 == grad_accum_steps - 1)
-                            # forward pass
-                            with ctx:
-                                _, loss = model(x, y, return_logits=False)
-                                # we have to scale the loss to account for gradient accumulation,
-                                # because the gradients just add on each successive backward().
-                                # addition of gradients corresponds to a SUM in the objective, but
-                                # instead of a SUM we want MEAN, so we scale the loss here
-                                loss = loss / grad_accum_steps
-                                lossf2 += loss.detach() # keep track of the mean loss
-                    if (step_1 + 1) % args.overfit_batch_number == 0:
-                        train_loader.reset()
-                    finaltrainloss += lossf2.item()
-
-                finaltrainloss /= args.overfit_batch_number
-                print0(f"iter {step+1} train loss {finaltrainloss}")
-                train_loader.reset()
-                if args.opt_type == "sfadam":
-                    for opt in optimizer:
-                        opt.train()
-
-
         # --------------- TRAINING SECTION END -------------------
         # everything that follows now is just diagnostics, prints, logging, etc.
 
@@ -1118,9 +1079,6 @@ if __name__ == "__main__":
         # keep track of smooth timings, last 20 iterations
         if step > 0 and step + 1 > args.num_iterations - 20:
             timings.append(t1-t0)
-
-#        if ((step+1) >= 600 and finaltrainloss < 0.01) or (step+1)>=3000:
-#            break
 
     print0(f"evaluating train loss")
     finaltrainloss = 0.0
